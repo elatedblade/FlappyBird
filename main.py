@@ -1,9 +1,4 @@
-from os import pipe
 import pygame, sys
-from pygame import transform
-
-from pygame.constants import RESIZABLE, SWSURFACE, USEREVENT
-from pygame.image import load
 
 def draw_floor():
     screen.blit(floor_surface, (floor_x_pos, 900))
