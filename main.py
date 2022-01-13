@@ -1,4 +1,8 @@
+import imp
+from multiprocessing.spawn import import_main_path
 import pygame, sys
+
+import random
 
 def draw_floor():
     screen.blit(floor_surface, (floor_x_pos, 900))
