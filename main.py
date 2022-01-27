@@ -1,5 +1,4 @@
 
-from tkinter import CENTER
 import pygame, sys, random
 
 def draw_floor():
@@ -42,14 +41,22 @@ def bird_animation():
      new_bird_rect = new_bird.get_rect(center = (50, bird_rect.centery))
      return new_bird, new_bird_rect
 
+def score_display():
+    score_surface = game_font.render("score", True, (255, 255, 255))
+    score_rect = score_surface.get_rect(center = (144, 50))
+    screen.blit(score_surface, score_rect)
+
 pygame.init()
 screen = pygame.display.set_mode((288, 512))    #defining Display
 clock = pygame.time.Clock()
+game_font = pygame.font.Font('04B_19.ttf', 40)
 
 # Game Variables
 gravity = 0.25
 bird_movement = 0
 game_active = True
+score = 0
+high_score = 0
 
 # Surfaces
 bg_surface = pygame.image.load('assets/background-day.png').convert()
@@ -113,6 +120,9 @@ while True:
         # Pipes
         pipe_list = move_pipes(pipe_list)
         draw_pipes(pipe_list)
+
+        # Score
+        score_display()
 
     # Floor
     floor_x_pos -= 1
