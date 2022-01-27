@@ -1,4 +1,5 @@
 
+from tkinter.tix import Tree
 import pygame, sys, random
 
 def draw_floor():
@@ -27,8 +28,11 @@ def draw_pipes(pipes):
 def check_collisions(pipes):
     for pipe in pipes:
         if bird_rect.colliderect(pipe):
+            hit_sound.play()
             return False
+
         if bird_rect.top <= -50 or bird_rect.bottom >= 450:
+            death_sound.play()
             return False
     return True
 
@@ -60,6 +64,7 @@ def update_score(score, high_score):
         high_score = score
     return (high_score)
 
+# Initiating pygame
 pygame.init()
 screen = pygame.display.set_mode((288, 512))    #defining Display
 clock = pygame.time.Clock()
@@ -95,6 +100,16 @@ SPAWNPIPE = pygame.USEREVENT
 pygame.time.set_timer(SPAWNPIPE, 900)
 pipe_height = [200, 300, 400]
 
+game_over_surface = pygame.image.load("assets/message.png").convert_alpha()
+game_over_rect = game_over_surface.get_rect(center = (144, 256))
+
+# Sounds
+flap_sound = pygame.mixer.Sound("sound/sound_sfx_wing.wav")
+hit_sound = pygame.mixer.Sound("sound/sound_sfx_hit.wav")
+death_sound = pygame.mixer.Sound("sound/sound_sfx_die.wav")
+score_sound = pygame.mixer.Sound("sound/sound_sfx_point.wav")
+score_sound_countdown = 40
+
 # Game Loop
 while True:
     #check for closing of window
@@ -104,9 +119,10 @@ while True:
             sys.exit()
 
         if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_SPACE:
+            if event.key == pygame.K_SPACE and game_active == True:
                 bird_movement = 0
                 bird_movement -= 6
+                flap_sound.play()
 
             if event.key == pygame.K_SPACE and game_active == False:
                 game_active = True
@@ -121,10 +137,10 @@ while True:
         if event.type == BIRDFLAP:
             if bird_index < 2:
                 bird_index += 1
-                
+                 
             else:
                 bird_index = 0
-            bird_surface, bird_rect = bird_animation( )
+            bird_surface, bird_rect = bird_animation()
                  
     screen.blit(bg_surface, (0,0))
 
@@ -142,10 +158,15 @@ while True:
         draw_pipes(pipe_list)
 
         # Score
-        score += 0.025 
+        score += 0.025
+        score_sound_countdown -= 1
+        if score_sound_countdown <= 0:
+            score_sound.play()
+            score_sound_countdown = 40
         score_display("main_game")
     
     else:
+        screen.blit(game_over_surface, game_over_rect)
         high_score = update_score(score, high_score) 
         score_display("game_over")
 
