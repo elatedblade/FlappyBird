@@ -1,5 +1,3 @@
-
-from tkinter.tix import Tree
 import pygame, sys, random
 
 def draw_floor():
