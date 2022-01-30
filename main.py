@@ -24,13 +24,17 @@ def draw_pipes(pipes):
             screen.blit(flip_pipe, pipe)
 
 def check_collisions(pipes):
+    global can_score
+
     for pipe in pipes:
         if bird_rect.colliderect(pipe):
             hit_sound.play()
+            can_score = True
             return False
 
         if bird_rect.top <= -50 or bird_rect.bottom >= 450:
             death_sound.play()
+            can_score = True
             return False
     return True
 
@@ -62,6 +66,18 @@ def update_score(score, high_score):
         high_score = score
     return (high_score)
 
+def pipe_score_check():
+    global score, can_score
+    
+    if pipe_list:
+        for pipe in pipe_list:
+            if 95 < pipe.centerx < 105 and can_score == True:
+                score += 1
+                score_sound.play()
+                can_score = False
+            if pipe.centerx < 0:
+                can_score = True
+
 # Initiating pygame
 pygame.init()
 screen = pygame.display.set_mode((288, 512))    #defining Display
@@ -73,6 +89,7 @@ gravity = 0.25
 bird_movement = 0
 game_active = True
 score = 0
+can_score = True
 high_score = 0
 
 # Surfaces
@@ -156,11 +173,7 @@ while True:
         draw_pipes(pipe_list)
 
         # Score
-        score += 0.025
-        score_sound_countdown -= 1
-        if score_sound_countdown <= 0:
-            score_sound.play()
-            score_sound_countdown = 40
+        pipe_score_check()
         score_display("main_game")
     
     else:
