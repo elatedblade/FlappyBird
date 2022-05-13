@@ -88,7 +88,7 @@ game_font = pygame.font.Font('04B_19.ttf', 40)
 # Game Variables
 gravity = 0.25
 bird_movement = 0
-game_active = True
+game_active = False
 score = 0
 can_score = True
 high_score = 0
