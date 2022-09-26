@@ -1,193 +1,353 @@
-import pygame, sys, random
+import pygame
+import random
+import os
+import time
+import neat
+pygame.font.init()  # init font
 
-def draw_floor():
-    screen.blit(floor_surface, (floor_x_pos, 450))
-    screen.blit(floor_surface, (floor_x_pos + 288, 450))
+WIN_WIDTH = 600
+WIN_HEIGHT = 800
+FLOOR = 730
+STAT_FONT = pygame.font.SysFont("comicsans", 50)
+END_FONT = pygame.font.SysFont("comicsans", 70)
+DRAW_LINES = False
 
-def create_pipe():
-    random_pipe_pos = random.choice(pipe_height)
-    bottom_pipe = pipe_surface.get_rect(midtop = (350, random_pipe_pos))
-    top_pipe = pipe_surface.get_rect(midbottom = (350, random_pipe_pos - 150))
-    return bottom_pipe, top_pipe
+WIN = pygame.display.set_mode((WIN_WIDTH, WIN_HEIGHT))
+pygame.display.set_caption("Flappy Bird")
 
-def move_pipes(pipes):
+pipe_img = pygame.transform.scale2x(pygame.image.load(os.path.join("assets","pipe-green.png")).convert_alpha())
+pipe_img = pygame.image.load("assets/pipe-green.png")
+bg_img = pygame.image.load("assets/background-day.png")
+bird_img1 = pygame.image.load("assets/bird1.png")
+bird_img2 = pygame.image.load("assets/bird2.png")
+bird_img3 = pygame.image.load("assets/bird3.png")
+bird_images = [bird_img1, bird_img2, bird_img3]
+base_img = pygame.image.load("assets/base.png")
+
+
+gen = 0
+
+class Bird:
+
+    MAX_ROTATION = 25
+    IMGS = bird_images
+    ROT_VEL = 20
+    ANIMATION_TIME = 5
+
+    def __init__(self, x, y):
+
+        self.x = x
+        self.y = y
+        self.tilt = 0  # degrees to tilt
+        self.tick_count = 0
+        self.vel = 0
+        self.height = self.y
+        self.img_count = 0
+        self.img = self.IMGS[0]
+
+    def jump(self):
+
+        self.vel = -10.5
+        self.tick_count = 0
+        self.height = self.y
+
+    def move(self):
+
+        self.tick_count += 1
+
+        # for downward acceleration
+        displacement = self.vel*(self.tick_count) + 0.5*(3)*(self.tick_count)**2  # calculate displacement
+
+        # terminal velocity
+        if displacement >= 16:
+            displacement = (displacement/abs(displacement)) * 16
+
+        if displacement < 0:
+            displacement -= 2
+
+        self.y = self.y + displacement
+
+        if displacement < 0 or self.y < self.height + 50:  # tilt up
+            if self.tilt < self.MAX_ROTATION:
+                self.tilt = self.MAX_ROTATION
+        else:  # tilt down
+            if self.tilt > -90:
+                self.tilt -= self.ROT_VEL
+
+    def draw(self, win):
+
+        self.img_count += 1
+
+        # For animation of bird, loop through three images
+        if self.img_count <= self.ANIMATION_TIME:
+            self.img = self.IMGS[0]
+        elif self.img_count <= self.ANIMATION_TIME*2:
+            self.img = self.IMGS[1]
+        elif self.img_count <= self.ANIMATION_TIME*3:
+            self.img = self.IMGS[2]
+        elif self.img_count <= self.ANIMATION_TIME*4:
+            self.img = self.IMGS[1]
+        elif self.img_count == self.ANIMATION_TIME*4 + 1:
+            self.img = self.IMGS[0]
+            self.img_count = 0
+
+        # so when bird is nose diving it isn't flapping
+        if self.tilt <= -80:
+            self.img = self.IMGS[1]
+            self.img_count = self.ANIMATION_TIME*2
+
+
+        # tilt the bird
+        blitRotateCenter(win, self.img, (self.x, self.y), self.tilt)
+
+    def get_mask(self):
+        return pygame.mask.from_surface(self.img)
+
+
+class Pipe():
+
+    GAP = 200
+    VEL = 5
+
+    def __init__(self, x):
+
+        self.x = x
+        self.height = 0
+
+        # where the top and bottom of the pipe is
+        self.top = 0
+        self.bottom = 0
+
+        self.PIPE_TOP = pygame.transform.flip(pipe_img, False, True)
+        self.PIPE_BOTTOM = pipe_img
+
+        self.passed = False
+
+        self.set_height()
+
+    def set_height(self):
+
+        self.height = random.randrange(50, 450)
+        self.top = self.height - self.PIPE_TOP.get_height()
+        self.bottom = self.height + self.GAP
+
+    def move(self):
+        self.x -= self.VEL
+
+    def draw(self, win):
+
+        # draw top
+        win.blit(self.PIPE_TOP, (self.x, self.top))
+        # draw bottom
+        win.blit(self.PIPE_BOTTOM, (self.x, self.bottom))
+
+
+    def collide(self, bird, win):
+
+        bird_mask = bird.get_mask()
+        top_mask = pygame.mask.from_surface(self.PIPE_TOP)
+        bottom_mask = pygame.mask.from_surface(self.PIPE_BOTTOM)
+        top_offset = (self.x - bird.x, self.top - round(bird.y))
+        bottom_offset = (self.x - bird.x, self.bottom - round(bird.y))
+
+        b_point = bird_mask.overlap(bottom_mask, bottom_offset)
+        t_point = bird_mask.overlap(top_mask,top_offset)
+
+        if b_point or t_point:
+            return True
+
+        return False
+
+class Base:
+
+    VEL = 5
+    WIDTH = base_img.get_width()
+    IMG = base_img
+
+    def __init__(self, y):
+        self.y = y
+        self.x1 = 0
+        self.x2 = self.WIDTH
+
+    def move(self):
+
+        self.x1 -= self.VEL
+        self.x2 -= self.VEL
+        if self.x1 + self.WIDTH < 0:
+            self.x1 = self.x2 + self.WIDTH
+
+        if self.x2 + self.WIDTH < 0:
+            self.x2 = self.x1 + self.WIDTH
+
+    def draw(self, win):
+
+        win.blit(self.IMG, (self.x1, self.y))
+        win.blit(self.IMG, (self.x2, self.y))
+
+
+def blitRotateCenter(surf, image, topleft, angle):
+
+    rotated_image = pygame.transform.rotate(image, angle)
+    new_rect = rotated_image.get_rect(center = image.get_rect(topleft = topleft).center)
+
+    surf.blit(rotated_image, new_rect.topleft)
+
+def draw_window(win, birds, pipes, base, score, gen, pipe_ind):
+
+    if gen == 0:
+        gen = 1
+    win.blit(bg_img, (0,0))
+
     for pipe in pipes:
-        pipe.centerx -= 5
-    visible_pipes = [pipe for pipe in pipe_list if pipe.right > -50]
-    return visible_pipes
+        pipe.draw(win)
 
-def draw_pipes(pipes):
-    for pipe in pipes:
-        if pipe.bottom >= 512:
-            screen.blit(pipe_surface, pipe)
-        else:
-            flip_pipe = pygame.transform.flip(pipe_surface, False, True)
-            screen.blit(flip_pipe, pipe)
+    base.draw(win)
+    for bird in birds:
+        # draw lines from bird to pipe
+        if DRAW_LINES:
+            try:
+                pygame.draw.line(win, (255,0,0), (bird.x+bird.img.get_width()/2, bird.y + bird.img.get_height()/2), (pipes[pipe_ind].x + pipes[pipe_ind].PIPE_TOP.get_width()/2, pipes[pipe_ind].height), 5)
+                pygame.draw.line(win, (255,0,0), (bird.x+bird.img.get_width()/2, bird.y + bird.img.get_height()/2), (pipes[pipe_ind].x + pipes[pipe_ind].PIPE_BOTTOM.get_width()/2, pipes[pipe_ind].bottom), 5)
+            except:
+                pass
+        # draw bird
+        bird.draw(win)
 
-def check_collisions(pipes):
-    global can_score
+    # score
+    score_label = STAT_FONT.render("Score: " + str(score),1,(255,255,255))
+    win.blit(score_label, (WIN_WIDTH - score_label.get_width() - 15, 10))
 
-    for pipe in pipes:
-        if bird_rect.colliderect(pipe):
-            hit_sound.play()
-            can_score = True
-            return False
+    # generations
+    score_label = STAT_FONT.render("Gens: " + str(gen-1),1,(255,255,255))
+    win.blit(score_label, (10, 10))
 
-        if bird_rect.top <= -50 or bird_rect.bottom >= 450:
-            death_sound.play()
-            can_score = True
-            return False
-    return True
-
-def rotate_bird(bird):
-    new_bird = pygame.transform.rotozoom(bird, -bird_movement * 3, 1)
-    return new_bird
-
-def bird_animation():
-     new_bird = bird_frames[bird_index]
-     new_bird_rect = new_bird.get_rect(center = (50, bird_rect.centery))
-     return new_bird, new_bird_rect
-
-def score_display(game_state):
-    if game_state == "main_game":
-        score_surface = game_font.render(str(int(score)), True, (255, 255, 255))
-        score_rect = score_surface.get_rect(center = (144, 50))
-        screen.blit(score_surface, score_rect)
-    if game_state == "game_over":
-        score_surface = game_font.render(f'Score: {int(score)}', True, (255, 255, 255))
-        score_rect = score_surface.get_rect(center = (144, 50))
-        screen.blit(score_surface, score_rect)
-
-        high_score_surface = game_font.render(f'High Score: {int(high_score)}', True, (255, 255, 255))
-        high_score_rect = high_score_surface.get_rect(center = (144, 425))
-        screen.blit(high_score_surface, high_score_rect)
-
-def update_score(score, high_score):
-    if score > high_score:
-        high_score = score
-    return (high_score)
-
-def pipe_score_check():
-    global score, can_score
-    
-    if pipe_list:
-        for pipe in pipe_list:
-            if 95 < pipe.centerx < 105 and can_score == True:
-                score += 1
-                score_sound.play()
-                can_score = False
-            if pipe.centerx < 0:
-                can_score = True
-
-# Initiating pygame
-pygame.init()
-screen = pygame.display.set_mode((288, 512))    #defining Display
-clock = pygame.time.Clock()
-game_font = pygame.font.Font('04B_19.ttf', 40)
-
-# Game Variables
-gravity = 0.25
-bird_movement = 0
-game_active = False
-score = 0
-can_score = True
-high_score = 0
-
-# Surfaces
-bg_surface = pygame.image.load('assets/background-day.png').convert()
-
-floor_surface = pygame.image.load("assets/base.png").convert()
-floor_x_pos = 0
-
-bird_downflap = pygame.image.load("assets/bluebird-downflap.png").convert_alpha()
-bird_midflap = pygame.image.load("assets/bluebird-midflap.png").convert_alpha()
-bird_upflap = pygame.image.load("assets/bluebird-upflap.png").convert_alpha()
-bird_frames = [bird_downflap, bird_midflap, bird_upflap]
-bird_index = 0
-bird_surface = bird_frames[bird_index]
-bird_rect = bird_surface.get_rect(center = (50, 256))
-
-BIRDFLAP = pygame.USEREVENT + 1
-pygame.time.set_timer(BIRDFLAP, 200)
-
-pipe_surface = pygame.image.load("assets/pipe-green.png").convert()
-pipe_list = []
-SPAWNPIPE = pygame.USEREVENT
-pygame.time.set_timer(SPAWNPIPE, 900)
-pipe_height = [200, 300, 400]
-
-game_over_surface = pygame.image.load("assets/message.png").convert_alpha()
-game_over_rect = game_over_surface.get_rect(center = (144, 256))
-
-# Sounds
-flap_sound = pygame.mixer.Sound("sound/sound_sfx_wing.wav")
-hit_sound = pygame.mixer.Sound("sound/sound_sfx_hit.wav")
-death_sound = pygame.mixer.Sound("sound/sound_sfx_die.wav")
-score_sound = pygame.mixer.Sound("sound/sound_sfx_point.wav")
-score_sound_countdown = 40
-
-# Game Loop
-while True:
-    #check for closing of window
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            pygame.quit()
-            sys.exit()
-
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_SPACE and game_active == True:
-                bird_movement = 0
-                bird_movement -= 6
-                flap_sound.play()
-
-            if event.key == pygame.K_SPACE and game_active == False:
-                game_active = True
-                pipe_list.clear()
-                bird_rect.center = (50, 256)
-                bird_movement = 0
-                score = 0
-
-        if event.type == SPAWNPIPE:
-            pipe_list.extend(create_pipe())
-
-        if event.type == BIRDFLAP:
-            if bird_index < 2:
-                bird_index += 1
-                 
-            else:
-                bird_index = 0
-            bird_surface, bird_rect = bird_animation()
-                 
-    screen.blit(bg_surface, (0,0))
-
-    if game_active == True:
-
-        # Bird
-        bird_movement += gravity
-        rotated_bird = rotate_bird(bird_surface)
-        bird_rect.centery += bird_movement
-        screen.blit(rotated_bird, bird_rect)
-        game_active = check_collisions(pipe_list)
-
-        # Pipes
-        pipe_list = move_pipes(pipe_list)
-        draw_pipes(pipe_list)
-
-        # Score
-        pipe_score_check()
-        score_display("main_game")
-    
-    else:
-        screen.blit(game_over_surface, game_over_rect)
-        high_score = update_score(score, high_score) 
-        score_display("game_over")
-
-    # Floor
-    floor_x_pos -= 1
-    draw_floor()
-    if floor_x_pos == -288:
-        floor_x_pos = 0
+    # alive
+    score_label = STAT_FONT.render("Alive: " + str(len(birds)),1,(255,255,255))
+    win.blit(score_label, (10, 50))
 
     pygame.display.update()
-    clock.tick(60)
-    
+
+
+def eval_genomes(genomes, config):
+
+    global WIN, gen
+    win = WIN
+    gen += 1
+
+    # start by creating lists holding the genome itself, the
+    # neural network associated with the genome and the
+    # bird object that uses that network to play
+    nets = []
+    birds = []
+    ge = []
+    for genome_id, genome in genomes:
+        genome.fitness = 0  # start with fitness level of 0
+        net = neat.nn.FeedForwardNetwork.create(genome, config)
+        nets.append(net)
+        birds.append(Bird(230,350))
+        ge.append(genome)
+
+    base = Base(FLOOR)
+    pipes = [Pipe(700)]
+    score = 0
+
+    clock = pygame.time.Clock()
+
+    run = True
+    while run and len(birds) > 0:
+        clock.tick(30)
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                run = False
+                pygame.quit()
+                quit()
+                break
+
+        pipe_ind = 0
+        if len(birds) > 0:
+            if len(pipes) > 1 and birds[0].x > pipes[0].x + pipes[0].PIPE_TOP.get_width():  # determine whether to use the first or second
+                pipe_ind = 1                                                                 # pipe on the screen for neural network input
+
+        for x, bird in enumerate(birds):  # give each bird a fitness of 0.1 for each frame it stays alive
+            ge[x].fitness += 0.1
+            bird.move()
+
+            # send bird location, top pipe location and bottom pipe location and determine from network whether to jump or not
+            output = nets[birds.index(bird)].activate((bird.y, abs(bird.y - pipes[pipe_ind].height), abs(bird.y - pipes[pipe_ind].bottom)))
+
+            if output[0] > 0.5:  # we use a tanh activation function so result will be between -1 and 1. if over 0.5 jump
+                bird.jump()
+
+        base.move()
+
+        rem = []
+        add_pipe = False
+        for pipe in pipes:
+            pipe.move()
+            # check for collision
+            for bird in birds:
+                if pipe.collide(bird, win):
+                    ge[birds.index(bird)].fitness -= 1
+                    nets.pop(birds.index(bird))
+                    ge.pop(birds.index(bird))
+                    birds.pop(birds.index(bird))
+
+            if pipe.x + pipe.PIPE_TOP.get_width() < 0:
+                rem.append(pipe)
+
+            if not pipe.passed and pipe.x < bird.x:
+                pipe.passed = True
+                add_pipe = True
+
+        if add_pipe:
+            score += 1
+            # can add this line to give more reward for passing through a pipe (not required)
+            for genome in ge:
+                genome.fitness += 5
+            pipes.append(Pipe(WIN_WIDTH))
+
+        for r in rem:
+            pipes.remove(r)
+
+        for bird in birds:
+            if bird.y + bird.img.get_height() - 10 >= FLOOR or bird.y < -50:
+                nets.pop(birds.index(bird))
+                ge.pop(birds.index(bird))
+                birds.pop(birds.index(bird))
+
+        draw_window(WIN, birds, pipes, base, score, gen, pipe_ind)
+
+        # break if score gets large enough
+
+
+
+def run(config_file):
+
+    config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction,
+                         neat.DefaultSpeciesSet, neat.DefaultStagnation,
+                         config_file)
+
+    # Create the population, which is the top-level object for a NEAT run.
+    p = neat.Population(config)
+
+    # Add a stdout reporter to show progress in the terminal.
+    p.add_reporter(neat.StdOutReporter(True))
+    stats = neat.StatisticsReporter()
+    p.add_reporter(stats)
+    #p.add_reporter(neat.Checkpointer(5))
+
+    # Run for up to 50 generations.
+    winner = p.run(eval_genomes, 50)
+
+    # show final stats
+    print('\nBest genome:\n{!s}'.format(winner))
+
+
+if __name__ == '__main__':
+    # Determine path to configuration file. This path manipulation is
+    # here so that the script will run successfully regardless of the
+    # current working directory.
+    local_dir = os.path.dirname(__file__)
+    config_path = os.path.join(local_dir, 'config-feedforward.txt')
+    run(config_path)
